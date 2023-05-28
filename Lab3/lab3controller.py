@@ -29,12 +29,10 @@ class Firewall (object):
       # Install flow entry on switch
       msg.match = of.ofp_match.from_packet(packet_in)
       self.connection.send(msg)
-      print("msg = ", msg)
       # Send packet back to switch for processing
       msg = of.ofp_packet_out()
       msg.data = packet_in
       self.connection.send(msg)
-      print("packet = ", msg)
     # arp is nw_proto = 2, dl_type = 0x806
     # tcp is nw_proto = 6, dl_type = 0x800
     else:
