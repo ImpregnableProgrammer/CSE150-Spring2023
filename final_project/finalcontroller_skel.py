@@ -29,6 +29,9 @@
 # To drop packets, simply omit the action.
 #
 
+# ISSUE: Exception: Error creating interface pair (s1-eth1,h1-eth0): RTNETLINK answers: File exists
+# Solution: https://github.com/mininet/mininet/issues/804
+
 from pox.core import core
 import pox.openflow.libopenflow_01 as of
 
