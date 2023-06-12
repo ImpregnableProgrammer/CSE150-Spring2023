@@ -8,5 +8,5 @@ For this project, we build upon the work begun in lab 3 to implement an IPV4 rou
 * **final_controller.py** - This file implements the network controller that manages packets flowing through the network switches by following the OpenFlow protocol. Invoke it my placing it in the `~/pox/pox/misc` directory and then running `sudo ~/pox/pox.py finalcontroller_skel.py` at the _same time_ as when the topology Mininet script `final_skel.py` is running on a system with Mininet installed.
 * **project.pdf** - This PDF explains the router implementation and provides screenshots of various command outputs in Mininet.
 
-## Resources
+## Resources used
 * Pox documentation: https://noxrepo.github.io/pox-doc/html/
