@@ -58,18 +58,78 @@ class Final (object):
     #      (for example, s1 would have switch_id == 1, s2 would have switch_id == 2, etc...)
     # You should use these to determine where a packet came from. To figure out where a packet 
     # is going, you can use the IP header information.
-    def flood():
-      msg = of.ofp_flow_mod()
-      msg.match = of.ofp_match.from_packet(packet_in)
-      msg.actions.append(of.ofp_action_output(port = of.OFPP_FLOOD))
-      self.connection.send(msg)
+    msg = of.ofp_flow_mod()
+    msg.match = of.ofp_match.from_packet(packet_in)
 
-    def drop():
-      msg = of.ofp_flow_mod()
-      msg.match = of.ofp_match.from_packet(packet_in)
-      msg.actions.append(of.ofp_action_output(port = of.OFPP_NONE))
-      self.connections.send(msg)
-      
+    floor1Switch1 = ['10.1.1.10', '10.1.2.20']
+    floor1Switch2 = ['10.1.3.30', '10.1.4.40']
+    floor1 = floor1Switch1 + floor1Switch2
+    floor2Switch1 = ['10.2.5.50', '10.2.6.60']
+    floor2Switch2 = ['10.2.7.70', '10.2.8.80']
+    floor2 = floor2Switch1 + floor2Switch2
+    hostUntrusted = ['106.44.82.103']
+    hostTrusted = ['108.24.31.112']
+    server = ['10.3.9.90']
+
+    ip = packet.find('ipv4')
+    if ip != None:
+      destIP = ip.dstip
+      icmp = packet.find('icmp') # ICMP is IP traffic (https://www.cloudflare.com/learning/ddos/glossary/internet-control-message-protocol-icmp/)
+      if switch_id == 1: # Data center switch
+        if port_on_switch == 1: # Traffic coming from core switch should reach the server
+          msg.actions.append(of.ofp_action_output(port = 2))
+        else: # Outgoing traffic should be sent to the core switch
+          msg.actions.append(of.ofp_action_output(port = 1))
+      elif switch_id == 2: # Core switch - process traffic from different locations according to rules
+        # Untrusted host - block all ICMP traffic except to trusted host, and other IP traffic only to server
+        # OR Trusted host - block all ICMP traffic to floor 2 and server, and other IP traffic only to server
+        # OR floor 2 hosts - block all ICMP traffic to floor 1 hosts
+        # OR floor 1 hosts - block all ICMP traffic to floor 2 hosts
+        # OR server - allow all outgoing traffic
+        # Allow all other traffic
+        if (port_on_switch == 7 and ((icmp and destIP not in hostTrusted) or destIP in server)) \
+        or (port_on_switch == 6 and ((icmp and destIP in floor2) or destIP in server)) \
+        or (port_on_switch in [4, 5] and (icmp and destIP in floor1)) \
+        or (port_on_switch in [2, 3] and (icmp and destIP in floor2)):
+          msg.actions.append(of.ofp_action_output(port = of.OFPP_NONE))
+        else: # Resolve allowed network traffic at core switch
+          if destIP in server:
+            msg.actions.append(of.ofp_action_output(port = 1))
+          elif destIP in floor1Switch1:
+            msg.actions.append(of.ofp_action_output(port = 2))
+          elif destIP in floor1Switch2:
+            msg.actions.append(of.ofp_action_output(port = 3))
+          elif destIP in floor2Switch1:
+            msg.actions.append(of.ofp_action_output(port = 4))
+          elif destIP in floor2Switch2:
+            msg.actions.append(of.ofp_action_output(port = 5))
+          elif destIP in hostTrusted:
+            msg.actions.append(of.ofp_action_output(port = 6))
+          elif destIP in hostUntrusted:
+            msg.actions.append(of.ofp_action_output(port = 7))
+      # For floor traffic within the switch
+      elif (switch_id == 3 and destIP == floor1Switch1[0]) \
+        or (switch_id == 4 and destIP == floor1Switch2[0]) \
+        or (switch_id == 5 and destIP == floor2Switch1[0]) \
+        or (switch_id == 6 and destIP == floor2Switch2[0]):
+        msg.actions.append(of.ofp_action_output(port = 2))
+      elif (switch_id == 3 and destIP == floor1Switch1[1]) \
+        or (switch_id == 4 and destIP == floor1Switch2[1]) \
+        or (switch_id == 5 and destIP == floor2Switch1[1]) \
+        or (switch_id == 6 and destIP == floor2Switch2[1]):
+        msg.actions.append(of.ofp_action_output(port = 3))
+      # For all other traffic across switches
+      else:
+        msg.actions.append(of.ofp_action_output(port = 1))
+    else:
+      msg.actions.append(of.ofp_action_output(port = of.OFPP_FLOOD))
+    self.connection.send(msg)
+
+    # Send packet back to switch for processing by new flow table entry
+    msg = of.ofp_packet_out(data = packet_in)
+    msg.actions.append(of.ofp_action_output(port = of.OFPP_TABLE))
+    self.connection.send(msg)
+
   def _handle_PacketIn (self, event):
     """
     Handles packet in messages from the switch.
